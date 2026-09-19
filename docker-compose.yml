@@ -1,0 +1,55 @@
+version: "3.8"
+
+# Local dev stack: Postgres+pgvector and the Spring Boot API run on ordinary CPU infra.
+# The LLM (chat + embeddings) is expected to be reachable via LLM_BASE_URL -- either this
+# optional local `ollama` service, or a vLLM/Ollama container deployed on Nosana GPU (see
+# nosana/README.md). Nothing here needs a GPU.
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_DB: contestmate
+      POSTGRES_USER: contestmate
+      POSTGRES_PASSWORD: contestmate
+    ports:
+      - "5432:5432"
+    volumes:
+      - contestmate-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U contestmate"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_URL: jdbc:postgresql://db:5432/contestmate
+      DB_USER: contestmate
+      DB_PASSWORD: contestmate
+      # Point at the optional local `ollama` service below, or at a Nosana-hosted vLLM/Ollama
+      # endpoint (https://<job-id>.<node>.node.k8s.prd.nos.ci). Leave blank to run with the
+      # heuristic (no-LLM) extraction/recommendation fallback.
+      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      DAYTONA_API_KEY: ${DAYTONA_API_KEY:-}
+    ports:
+      - "8080:8080"
+
+  # Optional: run an open-source model locally instead of on Nosana, for offline development.
+  # Not started by default -- `docker compose --profile local-llm up` to include it.
+  ollama:
+    image: ollama/ollama:latest
+    profiles: ["local-llm"]
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+
+volumes:
+  contestmate-db:
+  ollama-models:

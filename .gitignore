@@ -1,0 +1,12 @@
+.gradle/
+build/
+web/node_modules/
+web/.next/
+web/dist/
+web/.wrangler/
+.env
+.env.*
+!*.example
+*.log
+chatgpt-export*.json
+conversations.json
