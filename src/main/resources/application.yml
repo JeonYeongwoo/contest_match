@@ -22,15 +22,13 @@ spring:
       mode: always
 
 contest-mate:
-  daytona:
-    api-key: ${DAYTONA_API_KEY:}
   openai:
-    # Set OPENAI_API_KEY on the server only. Never ship an API key in the Android app or the GPU worker image.
+    # Set OPENAI_API_KEY on the server only. Never ship an API key in the Android app or any worker image.
     api-key: ${OPENAI_API_KEY:}
     model: ${OPENAI_MODEL:gpt-5-mini}
   llm:
-    # OpenAI-compatible endpoint. Point this at a self-hosted vLLM/Ollama server (e.g. running on Nosana)
-    # or at OpenAI directly. Left blank => heuristic fallback extraction/recommendation reasons are used.
+    # OpenAI-compatible endpoint. Point this at a self-hosted vLLM/Ollama server or at OpenAI directly.
+    # Left blank => heuristic fallback extraction/recommendation reasons are used.
     base-url: ${LLM_BASE_URL:}
     api-key: ${LLM_API_KEY:}
     chat-model: ${LLM_CHAT_MODEL:llama3.1}

@@ -18,12 +18,13 @@ MatchUp은 사용자의 관심 분야·전공/직업·지역·자격·개인/팀
                                             │
                                 REST API (Spring Boot)
 
-[Nosana GPU] ── Docker: Ollama (OpenAI 호환 /v1/chat, /v1/embeddings) ← LLM_BASE_URL로 호출
+[ollama] ── Docker: 로컬 CPU 컨테이너 (OpenAI 호환 /v1/chat, /v1/embeddings) ← LLM_BASE_URL로 호출
 ```
 
 - 크롤러 / DB / API: 일반 서버 (Spring Boot 단일 프로세스, `docker-compose.yml`)
-- LLM 추론: `LLM_BASE_URL`로 가리키는 별도 서버 (Nosana GPU 배포 예시는 [nosana/README.md](nosana/README.md))
-- `LLM_BASE_URL`이 비어 있으면 자동으로 규칙 기반(휴리스틱) 추출/추천으로 폴백 — GPU 없이도 전체 기능이 동작합니다.
+- LLM 추론: 같은 스택에서 함께 뜨는 로컬 `ollama` 컨테이너가 기본값이며, GPU 없이 CPU로 동작합니다.
+  외부 API 키가 전혀 필요 없습니다. `LLM_BASE_URL`을 다른 OpenAI 호환 서버로 바꿔치기할 수도 있습니다.
+- `LLM_BASE_URL`을 완전히 비워두면 자동으로 규칙 기반(휴리스틱) 추출/추천으로 폴백합니다.
 
 ## 실행
 
@@ -31,17 +32,14 @@ MatchUp은 사용자의 관심 분야·전공/직업·지역·자격·개인/팀
 docker compose up --build
 ```
 
-Postgres(+pgvector)와 API가 함께 뜨고, 시작 시 샘플 공모전 5건이 자동으로 시드됩니다
+Postgres(+pgvector), 로컬 LLM(`ollama`), API가 함께 뜹니다. `ollama-init` 컨테이너가 최초 1회
+`llama3.1`/`nomic-embed-text` 모델을 자동으로 내려받은 뒤 종료되며(모델은 볼륨에 캐시되어 재실행 시
+즉시 완료됩니다), 그 다음 API가 기동됩니다. 시작 시 샘플 공모전 5건도 자동으로 시드됩니다
 (`SEED_ENABLED=false`로 끌 수 있음). API: http://localhost:8080
 
-로컬에서 LLM까지 함께 테스트하려면:
-```bash
-docker compose --profile local-llm up --build
-# 별도 터미널에서 모델 pull
-docker exec -it <ollama-container> ollama pull llama3.1
-docker exec -it <ollama-container> ollama pull nomic-embed-text
-```
-그 후 `LLM_BASE_URL=http://ollama:11434` 로 backend 환경변수를 설정하세요.
+첫 실행은 모델 다운로드(수 GB) 때문에 몇 분 걸릴 수 있습니다. CPU로 추론하므로 응답이 느리면
+`LLM_BASE_URL=https://api.openai.com`, `LLM_API_KEY=<OpenAI 키>`로 환경변수를 바꿔 OpenAI를
+대신 쓰거나, `LLM_BASE_URL`을 다른 OpenAI 호환 서버로 지정하세요.
 
 ### 웹 데모
 `web/`는 사이트 빌더로 생성된 기존 스캐폴드로, 현재 이 백엔드 API를 호출하지 않습니다
@@ -80,8 +78,8 @@ gradle test --tests "com.contestmate.ai.ExtractionServiceTest" --tests "com.cont
 
 ## 보안과 개인정보
 - 사용자 식별은 클라이언트가 생성한 익명 UUID(`X-User-Id`)만 사용하며 이메일/이름 등 PII를 수집하지 않습니다.
-- `OPENAI_API_KEY`, `DAYTONA_API_KEY`, `LLM_API_KEY`, DB 접속정보는 서버 환경변수로만 설정하고 Git/GPU 이미지에 포함하지 않습니다.
-- Nosana GPU 컨테이너에는 모델 가중치와 추론 서버만 포함되며 DB/사용자 데이터는 전혀 전달되지 않습니다 (자세한 내용은 [nosana/README.md](nosana/README.md)).
+- `OPENAI_API_KEY`, `LLM_API_KEY`, DB 접속정보는 서버 환경변수로만 설정하고 Git/이미지에 포함하지 않습니다.
+- 별도로 배포하는 LLM 추론 서버에는 모델 가중치와 추론 서버만 포함되며 DB/사용자 데이터는 전혀 전달되지 않습니다.
 
 ## 제출물
 - [제출 정보](SUBMISSION.md)

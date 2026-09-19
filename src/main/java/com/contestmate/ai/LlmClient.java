@@ -4,8 +4,8 @@ import java.util.Optional;
 
 /**
  * Abstraction over an OpenAI-compatible inference server (OpenAI itself, or a self-hosted
- * vLLM/Ollama instance such as the one deployed on Nosana GPU nodes). Never receives the
- * database connection string or any user PII beyond the text being processed.
+ * vLLM/Ollama instance). Never receives the database connection string or any user PII
+ * beyond the text being processed.
  */
 public interface LlmClient {
 

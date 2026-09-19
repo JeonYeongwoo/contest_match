@@ -1,9 +1,10 @@
 version: "3.8"
 
-# Local dev stack: Postgres+pgvector and the Spring Boot API run on ordinary CPU infra.
-# The LLM (chat + embeddings) is expected to be reachable via LLM_BASE_URL -- either this
-# optional local `ollama` service, or a vLLM/Ollama container deployed on Nosana GPU (see
-# nosana/README.md). Nothing here needs a GPU.
+# Local dev stack: everything runs on ordinary CPU infra, no external API keys required.
+# Postgres+pgvector and the Spring Boot API run as usual, and the LLM (chat + embeddings)
+# is served by the local `ollama` service below over its OpenAI-compatible HTTP API.
+# Set LLM_BASE_URL to point at a different OpenAI-compatible server instead if you have one;
+# leaving it entirely blank falls back to heuristic (no-LLM) extraction/recommendation.
 services:
   db:
     image: pgvector/pgvector:pg16
@@ -21,34 +22,48 @@ services:
       timeout: 5s
       retries: 10
 
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  # One-shot job: pulls the chat + embedding models into the `ollama` service above, then exits.
+  # Runs every startup but is nearly instant once the models are already cached in the volume.
+  ollama-init:
+    image: ollama/ollama:latest
+    depends_on:
+      ollama:
+        condition: service_healthy
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c", "ollama pull llama3.1 && ollama pull nomic-embed-text"]
+    restart: "no"
+
   backend:
     build: .
     depends_on:
       db:
         condition: service_healthy
+      ollama-init:
+        condition: service_completed_successfully
     environment:
       DB_URL: jdbc:postgresql://db:5432/contestmate
       DB_USER: contestmate
       DB_PASSWORD: contestmate
-      # Point at the optional local `ollama` service below, or at a Nosana-hosted vLLM/Ollama
-      # endpoint (https://<job-id>.<node>.node.k8s.prd.nos.ci). Leave blank to run with the
-      # heuristic (no-LLM) extraction/recommendation fallback.
-      LLM_BASE_URL: ${LLM_BASE_URL:-}
+      # Defaults to the local `ollama` service above. Point at any other OpenAI-compatible
+      # endpoint instead, or leave blank to run with the heuristic (no-LLM) fallback.
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
       LLM_API_KEY: ${LLM_API_KEY:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      DAYTONA_API_KEY: ${DAYTONA_API_KEY:-}
     ports:
       - "8080:8080"
-
-  # Optional: run an open-source model locally instead of on Nosana, for offline development.
-  # Not started by default -- `docker compose --profile local-llm up` to include it.
-  ollama:
-    image: ollama/ollama:latest
-    profiles: ["local-llm"]
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama-models:/root/.ollama
 
 volumes:
   contestmate-db:
